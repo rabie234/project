@@ -18,6 +18,8 @@ Route::middleware('auth:api')->get('/user', function (Request $request) {
 });
 
 
+
+
 Route::get('brands', [brandsData::class, 'index']);
 
 Route::get('items', [itemsfile::class, 'index']);

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\customerUser;
+use App\Models\customers;
 use Illuminate\Http\Request;
 
 // use App\Models\supportCustomer;
@@ -11,29 +12,27 @@ use Illuminate\Http\Request;
 class authentication extends Controller
 {
     public function login(Request $request){
+        
         $username = $request->input('username');
         $code = $request->input('password');
-        $user = customerUser::where('user_name', $username)
-        ->join('customer', 'customerUser.customer_id', '=', 'customer.id')
-        ->where('customer.code', $code)
-        ->select('customerUser.*','customer.*') // select columns as needed
-        ->first();
-       $response = null;
-       if($user){
-        $response = $user;
-        $response['success'] = true;
-       }else{
-        $response['success'] = false;
-       }
-      
-        // $response = supportCustomer::where('name_customer','=',$username)->where('code','=',$password)->first();
-        // // $response = supportCustomer::all();
-        // if($response){
-        //     $response['success'] = true;
-        // }else{
-        //     $response['success'] = false;
-        // }
+
        
+        // Query with correct table name 'customer' (not 'customers')
+        $user = customerUser::join('customer', 'customerUser.customer_id', '=', 'customer.id')
+            ->where('customerUser.user_name','admin')
+            ->where('customer.code', '12345')
+            ->select('customerUser.*', 'customer.*')
+            ->first();
+
+        $response = [];
+        if ($user) {
+            $response = $user->toArray();
+            $response['success'] = true;
+        } else {
+            $response['success'] = false;
+            $response['message'] = 'Invalid username or password';
+        }
+
         return response()->json($response);
     }
 }
