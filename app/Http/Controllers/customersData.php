@@ -8,7 +8,6 @@ use App\Models\customers;
 
 use App\Models\invoice;
 use App\Models\jvdetails;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class customersData extends Controller
@@ -20,27 +19,20 @@ class customersData extends Controller
         $search = "";
         $db_name = $request->query('db_name');
         if ($request->has('search')) {
-
             $search = $request->input('search');
         }
-        $minutes = 3600; // Cache for 60 minutes, adjust as needed
+        
+        // Execute query directly without caching
+        $sql = customers::select('customers.*');
 
-        $cacheKey = 'customers_' . $filter . '_' . $limit . '_' . md5($search) . '_' . $db_name;
+        if ($search !== "") {
+            $sql->where('description', 'like', '%' . $search . '%');
+        }
+        if ($filter !== "") {
+            $sql->where('customer', '=', $filter);
+        }
 
-        // Check if the data is already cached
-        $items = Cache::remember($cacheKey, 3600, function () use ($filter, $limit, $search) {
-            $sql =  customers::select('customers.*');
-
-            if ($search !== "") {
-                $sql->where('description', 'like', '%' . $search . '%');
-            }
-            if ($filter !== "") {
-                $sql->where('customer', '=', $filter);
-            }
-
-
-            return $sql->take($limit)->get();
-        });
+        $items = $sql->take($limit)->get();
 
         return response()->json($items, 200);
     }
@@ -62,8 +54,6 @@ class customersData extends Controller
             ->orderBy('jvdetails.ddate', 'desc')
             ->get();
 
-
-
         $sumFamt = jvdetails::where('idacc', $id)->sum('famt');
 
         // Return the data with the sum
@@ -80,36 +70,30 @@ class customersData extends Controller
             ->where('id', 1)
             ->value('USDRate');
 
-        $minutes = 3600;
-
         $db_name = $request->query('db_name');
 
-        $topSupplier = Cache::remember('top_supplier_' . $db_name, $minutes, function () use ($rate_lbp) {
-            return invoice::select('customers.description','customers.idcurrency', 'customers.acc_code')
-                ->selectRaw('SUM(CASE WHEN customers.idcurrency=1 THEN invoice.NetAmnt/? ELSE invoice.NetAmnt END) AS amount, MAX(customers.email) AS email, MAX(customers.tel) AS tel, MAX(customers.City) AS City', [$rate_lbp])
-                ->join('customers', 'customers.id', '=', 'invoice.iddealer')
-                ->where('customers.customer', 0)
-                ->groupBy('customers.description', 'customers.acc_code','customers.idcurrency')
-                ->orderByDesc('amount')
-                ->take(5)
-                ->get();
-        });
-
-        $topCustomer = Cache::remember('top_customers_' . $db_name, $minutes, function () use ($rate_lbp){
-            return invoice::select('customers.description','customers.idcurrency', 'customers.acc_code')
+        // Execute queries directly without caching
+        $topSupplier = invoice::select('customers.description','customers.idcurrency', 'customers.acc_code')
             ->selectRaw('SUM(CASE WHEN customers.idcurrency=1 THEN invoice.NetAmnt/? ELSE invoice.NetAmnt END) AS amount, MAX(customers.email) AS email, MAX(customers.tel) AS tel, MAX(customers.City) AS City', [$rate_lbp])
             ->join('customers', 'customers.id', '=', 'invoice.iddealer')
-                ->where('customers.customer', 1)
-                ->groupBy('customers.description', 'customers.acc_code','customers.idcurrency')
-                ->orderByDesc('amount')
-                ->take(5)
-                ->get();
-        });
+            ->where('customers.customer', 0)
+            ->groupBy('customers.description', 'customers.acc_code','customers.idcurrency')
+            ->orderByDesc('amount')
+            ->take(5)
+            ->get();
+
+        $topCustomer = invoice::select('customers.description','customers.idcurrency', 'customers.acc_code')
+            ->selectRaw('SUM(CASE WHEN customers.idcurrency=1 THEN invoice.NetAmnt/? ELSE invoice.NetAmnt END) AS amount, MAX(customers.email) AS email, MAX(customers.tel) AS tel, MAX(customers.City) AS City', [$rate_lbp])
+            ->join('customers', 'customers.id', '=', 'invoice.iddealer')
+            ->where('customers.customer', 1)
+            ->groupBy('customers.description', 'customers.acc_code','customers.idcurrency')
+            ->orderByDesc('amount')
+            ->take(5)
+            ->get();
 
         $responseData = [
             'topSupplier' => $topSupplier,
             'topCustomers' => $topCustomer
-
         ];
 
         return response()->json($responseData, 200);

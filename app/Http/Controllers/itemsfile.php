@@ -8,7 +8,6 @@ use Illuminate\Support\Facades\Config;
 use App\Models\itemfile;
 
 use App\Models\invoicedetails;
-use Illuminate\Support\Facades\Cache;
 
 class itemsfile extends Controller
 {
@@ -24,26 +23,19 @@ class itemsfile extends Controller
         $perPage = $request->input('per_page', 10); // Default to 10 items per page
         $page = $request->input('page', 1);
 
-        // Generate a unique cache key based on filter and search parameters
-        $cacheKey = 'itemsh_f_' . $dbName . $filter . '__' . $limit . '_' . $page . '_' . $perPage . '_' . md5($search);
+        // Execute query directly without caching
+        $sql = itemfile::select('itemfile.*', 'itemunit.Price', 'itemunit.idunit', 'units.description as unitName')
+            ->leftJoin('itemunit', 'itemfile.id', '=', 'itemunit.iditem')
+            ->leftJoin('units', 'units.id', '=', 'itemunit.idunit');
 
-        // Check if the data is already cached
-        $items = Cache::remember($cacheKey, 3600, function () use ($filter, $limit, $search, $page, $perPage) {
-            $sql = itemfile::select('itemfile.*', 'itemunit.Price', 'itemunit.idunit', 'units.description as unitName')
-                ->leftJoin('itemunit', 'itemfile.id', '=', 'itemunit.iditem')
-                ->leftJoin('units', 'units.id', '=', 'itemunit.idunit');
+        if ($search !== "") {
+            $sql->where('itemfile.description', 'like', '%' . $search . '%');
+        }
+        if ($filter !== "") {
+            $sql->where('itemfile.isActive', '=', $filter);
+        }
 
-            if ($search !== "") {
-                $sql->where('itemfile.description', 'like', '%' . $search . '%');
-            }
-            if ($filter !== "") {
-                $sql->where('itemfile.isActive', '=', $filter);
-            }
-
-
-
-            return $sql->paginate($perPage, ['*'], 'page', $page);
-        });
+        $items = $sql->paginate($perPage, ['*'], 'page', $page);
 
         return response()->json($items, 200);
     }
@@ -52,37 +44,32 @@ class itemsfile extends Controller
 
     public function minMaxItem(Request $request)
     {
-        $minutes = 3600;
-
         $db_name = $request->query('db_name');
 
-        $topItems = Cache::remember('top_items__' . $db_name, $minutes, function () {
-            return invoicedetails::select('invoicedetails.IdItem', 'itemfile.Description AS Description', 'itemfile.itemcode AS code', 'itemunit.Price AS price')
-                ->selectRaw('SUM(qty) AS sumQty')
-                ->join('itemfile', 'itemfile.id', '=', 'invoicedetails.IdItem')
-                ->join('itemunit', function ($join) {
-                    $join->on('itemfile.id', '=', 'itemunit.iditem')
-                        ->on('itemfile.baseunit', '=', 'itemunit.idunit');
-                })
-                ->groupBy('IdItem', 'Description', 'code', 'price')
-                ->orderByDesc('sumQty')
-                ->take(15)
-                ->get();
-        });
+        // Execute queries directly without caching
+        $topItems = invoicedetails::select('invoicedetails.IdItem', 'itemfile.Description AS Description', 'itemfile.itemcode AS code', 'itemunit.Price AS price')
+            ->selectRaw('SUM(qty) AS sumQty')
+            ->join('itemfile', 'itemfile.id', '=', 'invoicedetails.IdItem')
+            ->join('itemunit', function ($join) {
+                $join->on('itemfile.id', '=', 'itemunit.iditem')
+                    ->on('itemfile.baseunit', '=', 'itemunit.idunit');
+            })
+            ->groupBy('IdItem', 'Description', 'code', 'price')
+            ->orderByDesc('sumQty')
+            ->take(15)
+            ->get();
 
-        $minItems = Cache::remember('min_items__' . $db_name, $minutes, function () {
-            return invoicedetails::select('invoicedetails.IdItem', 'itemfile.Description AS Description', 'itemfile.itemcode AS code', 'itemunit.Price AS price')
-                ->selectRaw('SUM(qty) AS sumQty')
-                ->join('itemfile', 'itemfile.id', '=', 'invoicedetails.IdItem')
-                ->join('itemunit', function ($join) {
-                    $join->on('itemfile.id', '=', 'itemunit.iditem')
-                        ->on('itemfile.baseunit', '=', 'itemunit.idunit');
-                })
-                ->groupBy('IdItem', 'Description', 'code', 'price')
-                ->orderBy('sumQty')
-                ->take(15)
-                ->get();
-        });
+        $minItems = invoicedetails::select('invoicedetails.IdItem', 'itemfile.Description AS Description', 'itemfile.itemcode AS code', 'itemunit.Price AS price')
+            ->selectRaw('SUM(qty) AS sumQty')
+            ->join('itemfile', 'itemfile.id', '=', 'invoicedetails.IdItem')
+            ->join('itemunit', function ($join) {
+                $join->on('itemfile.id', '=', 'itemunit.iditem')
+                    ->on('itemfile.baseunit', '=', 'itemunit.idunit');
+            })
+            ->groupBy('IdItem', 'Description', 'code', 'price')
+            ->orderBy('sumQty')
+            ->take(15)
+            ->get();
 
         $responseData = [
             'topItems' => $topItems,
