@@ -19,8 +19,8 @@ class authentication extends Controller
        
         // Query with correct table name 'customer' (not 'customers')
         $user = customerUser::join('customer', 'customerUser.customer_id', '=', 'customer.id')
-            ->where('customerUser.user_name','admin')
-            ->where('customer.code', '12345')
+            ->where('customerUser.user_name',$username)
+            ->where('customer.code', $code)
             ->select('customerUser.*', 'customer.*')
             ->first();
 
@@ -32,7 +32,8 @@ class authentication extends Controller
             $response['success'] = false;
             $response['message'] = 'Invalid username or password';
         }
-
+            print_r($response);
+            die();
         return response()->json($response);
     }
 }
