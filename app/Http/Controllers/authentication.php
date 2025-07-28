@@ -32,8 +32,6 @@ class authentication extends Controller
             $response['success'] = false;
             $response['message'] = 'Invalid username or password';
         }
-            print_r($response);
-            die();
         return response()->json($response);
     }
 }
